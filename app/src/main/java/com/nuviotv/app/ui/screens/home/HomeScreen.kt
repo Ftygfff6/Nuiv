@@ -41,7 +41,7 @@ fun HomeScreen(navController: NavController) {
             state.isLoading -> LoadingScreen()
             state.error != null -> ErrorScreen(state.error!!) { viewModel.loadContent() }
             state.movies.isEmpty() && state.series.isEmpty() -> EmptyScreen(navController)
-            else -> ContentList(state.movies, state.series)
+            else -> ContentList(state.movies, state.series, navController)
         }
     }
 }
@@ -64,15 +64,12 @@ private fun UpdateBanner(version: String?, isDownloading: Boolean, onUpdate: () 
                 CircularProgressIndicator(Modifier.size(28.dp), color = Color.White, strokeWidth = 3.dp)
             } else {
                 Button(onClick = onUpdate,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White, contentColor = Color(0xFF7B5CFF)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF7B5CFF)),
                     shape = RoundedCornerShape(8.dp)) {
                     Text("تحديث الآن", fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.width(8.dp))
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, "إغلاق", tint = Color.White)
-                }
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "إغلاق", tint = Color.White) }
             }
         }
     }
@@ -105,7 +102,7 @@ private fun EmptyScreen(navController: NavController) {
     Column(Modifier.fillMaxSize().padding(48.dp)) {
         Text("مرحبًا بك في Niov", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.height(16.dp))
-        Text("جاري تثبيت Cinemeta تلقائيًا...", fontSize = 16.sp, color = Color(0xFFB0B0BE))
+        Text("جاري تثبيت المصادر تلقائيًا...", fontSize = 16.sp, color = Color(0xFFB0B0BE))
         Spacer(Modifier.height(24.dp))
         Button(onClick = { navController.navigate("addons") },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B5CFF))) {
@@ -117,17 +114,17 @@ private fun EmptyScreen(navController: NavController) {
 }
 
 @Composable
-private fun ContentList(movies: List<CatalogResult>, series: List<CatalogResult>) {
+private fun ContentList(movies: List<CatalogResult>, series: List<CatalogResult>, navController: NavController) {
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        item { movies.firstOrNull()?.metas?.firstOrNull()?.let { HeroSection(it) } }
-        items(movies) { c -> CatalogRow("${c.catalogName} — ${c.addonName}", c.metas) }
-        items(series) { c -> CatalogRow("${c.catalogName} — ${c.addonName}", c.metas) }
+        item { movies.firstOrNull()?.metas?.firstOrNull()?.let { HeroSection(it, navController) } }
+        items(movies) { c -> CatalogRow("${c.catalogName} — ${c.addonName}", c.metas, navController) }
+        items(series) { c -> CatalogRow("${c.catalogName} — ${c.addonName}", c.metas, navController) }
         item { Spacer(Modifier.height(48.dp)) }
     }
 }
 
 @Composable
-private fun HeroSection(meta: Meta) {
+private fun HeroSection(meta: Meta, navController: NavController) {
     Box(Modifier.fillMaxWidth().height(420.dp)) {
         if (!meta.background.isNullOrBlank()) {
             AsyncImage(meta.background, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -148,23 +145,26 @@ private fun HeroSection(meta: Meta) {
 }
 
 @Composable
-private fun CatalogRow(title: String, metas: List<Meta>) {
+private fun CatalogRow(title: String, metas: List<Meta>, navController: NavController) {
     if (metas.isEmpty()) return
     Column {
         Text(title, Modifier.padding(start = 48.dp, bottom = 12.dp),
             fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
         LazyRow(contentPadding = PaddingValues(horizontal = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            items(metas) { PosterCard(it) }
+            items(metas) { PosterCard(it, navController) }
         }
     }
 }
 
 @Composable
-private fun PosterCard(meta: Meta) {
-    Card(onClick = { }, modifier = Modifier.width(180.dp).height(270.dp),
+private fun PosterCard(meta: Meta, navController: NavController) {
+    Card(
+        onClick = { navController.navigate("detail/${meta.type}/${meta.id}") },
+        modifier = Modifier.width(180.dp).height(270.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF16161D)),
-        shape = RoundedCornerShape(12.dp)) {
+        shape = RoundedCornerShape(12.dp)
+    ) {
         Box(Modifier.fillMaxSize()) {
             if (!meta.poster.isNullOrBlank()) {
                 AsyncImage(meta.poster, meta.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)

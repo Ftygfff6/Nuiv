@@ -17,12 +17,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.nuviotv.app.ui.screens.addons.AddAddonScreen
 import com.nuviotv.app.ui.screens.addons.AddonsListScreen
+import com.nuviotv.app.ui.screens.detail.DetailScreen
 import com.nuviotv.app.ui.screens.home.HomeScreen
 import com.nuviotv.app.ui.screens.settings.SettingsScreen
 
@@ -40,12 +43,7 @@ class MainActivity : ComponentActivity() {
                     onSurface = Color.White
                 )
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF0E0E12)
-                ) {
-                    AppNavigation()
-                }
+                Surface(Modifier.fillMaxSize(), color = Color(0xFF0E0E12)) { AppNavigation() }
             }
         }
     }
@@ -57,16 +55,13 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val hideSidebar = currentRoute?.startsWith("detail") == true ||
+            currentRoute == "add_addon" ||
+            currentRoute == "addons"
+
     Row(Modifier.fillMaxSize().background(Color(0xFF0E0E12))) {
-        // Sidebar only on main screens
-        if (currentRoute !in listOf("add_addon", "addons", "player")) {
-            Sidebar(navController, currentRoute)
-        }
-        NavHost(
-            navController = navController,
-            startDestination = "home",
-            modifier = Modifier.weight(1f)
-        ) {
+        if (!hideSidebar) Sidebar(navController, currentRoute)
+        NavHost(navController = navController, startDestination = "home", modifier = Modifier.weight(1f)) {
             composable("home") { HomeScreen(navController) }
             composable("explore") { HomeScreen(navController) }
             composable("library") { HomeScreen(navController) }
@@ -74,6 +69,17 @@ fun AppNavigation() {
             composable("settings") { SettingsScreen(navController) }
             composable("addons") { AddonsListScreen(navController) }
             composable("add_addon") { AddAddonScreen(navController) }
+            composable(
+                "detail/{type}/{id}",
+                arguments = listOf(
+                    navArgument("type") { type = NavType.StringType },
+                    navArgument("id") { type = NavType.StringType }
+                )
+            ) { entry ->
+                val type = entry.arguments?.getString("type") ?: "movie"
+                val id = entry.arguments?.getString("id") ?: ""
+                DetailScreen(navController, type, id)
+            }
         }
     }
 }
@@ -91,26 +97,15 @@ fun Sidebar(navController: NavController, currentRoute: String?) {
     )
 
     Column(
-        modifier = Modifier
-            .width(120.dp)
-            .fillMaxHeight()
-            .background(Color(0xFF0A0A0F))
-            .padding(vertical = 24.dp),
+        Modifier.width(120.dp).fillMaxHeight().background(Color(0xFF0A0A0F)).padding(vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = "Niov",
-            color = Color(0xFF7B5CFF),
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
+        Text("Niov", color = Color(0xFF7B5CFF), fontSize = 22.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 24.dp))
 
         menuItems.forEach { item ->
-            SidebarButton(
-                item = item,
-                isSelected = currentRoute == item.route,
+            Button(
                 onClick = {
                     if (currentRoute != item.route) {
                         navController.navigate(item.route) {
@@ -119,42 +114,22 @@ fun Sidebar(navController: NavController, currentRoute: String?) {
                             restoreState = true
                         }
                     }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).height(72.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (currentRoute == item.route) Color(0xFF7B5CFF).copy(alpha = 0.18f) else Color.Transparent,
+                    contentColor = if (currentRoute == item.route) Color(0xFF7B5CFF) else Color(0xFFB0B0BE)
+                ),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center) {
+                    Icon(item.icon, item.label, tint = if (currentRoute == item.route) Color(0xFF7B5CFF) else Color(0xFFB0B0BE))
+                    Spacer(Modifier.height(4.dp))
+                    Text(item.label, fontSize = 11.sp,
+                        color = if (currentRoute == item.route) Color(0xFF7B5CFF) else Color(0xFFB0B0BE))
                 }
-            )
-        }
-    }
-}
-
-@Composable
-private fun SidebarButton(
-    item: SidebarItem,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .height(72.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected) Color(0xFF7B5CFF).copy(alpha = 0.18f) else Color.Transparent,
-            contentColor = if (isSelected) Color(0xFF7B5CFF) else Color(0xFFB0B0BE)
-        ),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(item.icon, item.label, tint = if (isSelected) Color(0xFF7B5CFF) else Color(0xFFB0B0BE))
-            Spacer(Modifier.height(4.dp))
-            Text(
-                item.label,
-                fontSize = 11.sp,
-                color = if (isSelected) Color(0xFF7B5CFF) else Color(0xFFB0B0BE)
-            )
+            }
         }
     }
 }

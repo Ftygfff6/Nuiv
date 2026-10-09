@@ -16,62 +16,110 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.nuviotv.app.di.AppContainer
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(navController: NavController) {
-    var subtitleEnabled by remember { mutableStateOf(true) }
-    var autoPlay by remember { mutableStateOf(false) }
-    var quality by remember { mutableStateOf("Auto") }
+    val scope = rememberCoroutineScope()
+    var rdKey by remember { mutableStateOf("") }
+    var torboxKey by remember { mutableStateOf("") }
+    var premiumizeKey by remember { mutableStateOf("") }
+    var metadataSource by remember { mutableStateOf("cinemeta") }
+    var tmdbKey by remember { mutableStateOf("") }
+    var statusMsg by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        rdKey = AppContainer.debridPreferences.realDebridKey.first()
+        torboxKey = AppContainer.debridPreferences.torboxKey.first()
+        premiumizeKey = AppContainer.debridPreferences.premiumizeKey.first()
+        metadataSource = AppContainer.debridPreferences.metadataSource.first()
+        tmdbKey = AppContainer.debridPreferences.tmdbKey.first()
+    }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0E0E12))
-            .verticalScroll(rememberScrollState())
-            .padding(32.dp)
+        Modifier.fillMaxSize().background(Color(0xFF0E0E12)).verticalScroll(rememberScrollState()).padding(32.dp)
     ) {
-        Text(
-            "الإعدادات",
-            fontSize = 42.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
+        Text("الإعدادات", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 24.dp))
 
-        // Section: Playback
-        SettingsSection("التشغيل") {
-            SettingsSwitch("تفعيل الترجمة افتراضيًا", subtitleEnabled) { subtitleEnabled = it }
-            SettingsSwitch("التشغيل التلقائي للمصدر الأول", autoPlay) { autoPlay = it }
-            SettingsDropdown(
-                label = "جودة الفيديو",
-                options = listOf("Auto", "1080p", "720p", "480p"),
-                selected = quality,
-                onSelected = { quality = it }
+        // Metadata
+        SettingsSection("مصدر البيانات (Metadata)") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(
+                    selected = metadataSource == "cinemeta",
+                    onClick = { metadataSource = "cinemeta"; scope.launch { AppContainer.debridPreferences.setMetadataSource("cinemeta") } }
+                )
+                Text("Cinemeta (عام — بدون مفتاح)", color = Color.White)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(
+                    selected = metadataSource == "tmdb",
+                    onClick = { metadataSource = "tmdb"; scope.launch { AppContainer.debridPreferences.setMetadataSource("tmdb") } }
+                )
+                Text("TMDB (يحتاج مفتاح API)", color = Color.White)
+            }
+            if (metadataSource == "tmdb") {
+                DebridKeyField("TMDB API Key", tmdbKey) {
+                    tmdbKey = it
+                    scope.launch { AppContainer.debridPreferences.setTmdbKey(it) }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Debrid
+        SettingsSection("خدمات Debrid (للمصادر)") {
+            Text(
+                "أضف مفتاح واحد على الأقل لتفعيل المصادر عالية الجودة",
+                color = Color(0xFFB0B0BE), fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)
             )
+
+            DebridKeyField("Real-Debrid API Key", rdKey) {
+                rdKey = it
+                scope.launch { AppContainer.debridPreferences.setRealDebridKey(it.trim()) }
+            }
+            DebridKeyField("TorBox API Key", torboxKey) {
+                torboxKey = it
+                scope.launch { AppContainer.debridPreferences.setTorboxKey(it.trim()) }
+            }
+            DebridKeyField("Premiumize API Key", premiumizeKey) {
+                premiumizeKey = it
+                scope.launch { AppContainer.debridPreferences.setPremiumizeKey(it.trim()) }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    statusMsg = "جاري تحديث المصادر..."
+                    scope.launch {
+                        kotlinx.coroutines.delay(500)
+                        AppContainer.refreshTorrentio()
+                        kotlinx.coroutines.delay(2500)
+                        statusMsg = "✅ تم تحديث المصادر"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B5CFF))
+            ) {
+                Icon(Icons.Default.Refresh, null)
+                Spacer(Modifier.width(8.dp))
+                Text("تحديث المصادر", fontWeight = FontWeight.Bold)
+            }
+
+            statusMsg?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, color = Color(0xFF00D4B8), fontSize = 13.sp)
+            }
         }
 
         Spacer(Modifier.height(16.dp))
 
-        // Section: Content
+        // Addons & Content
         SettingsSection("المحتوى") {
-            SettingsButton("إدارة الإضافات", Icons.Default.Extension) {
-                navController.navigate("addons")
-            }
-            SettingsButton("المفضلة", Icons.Default.Favorite) {
-                navController.navigate("library")
-            }
-            SettingsButton("سجل المشاهدة", Icons.Default.History) {
-                // TODO: navigate to history
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Section: About
-        SettingsSection("حول") {
-            SettingsButton("حول Niov", Icons.Default.Info) { }
-            SettingsButton("الشروط والأحكام", Icons.Default.Description) { }
-            SettingsButton("الإصدار", Icons.Default.Info) { }
+            SettingsButton("إدارة الإضافات", Icons.Default.Extension) { navController.navigate("addons") }
+            SettingsButton("المفضلة", Icons.Default.Favorite) { navController.navigate("library") }
         }
 
         Spacer(Modifier.height(48.dp))
@@ -79,91 +127,43 @@ fun SettingsScreen(navController: NavController) {
 }
 
 @Composable
-private fun SettingsSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF16161D), RoundedCornerShape(12.dp))
-            .padding(16.dp)
-    ) {
-        Text(
-            title,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF7B5CFF),
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
+private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().background(Color(0xFF16161D), RoundedCornerShape(12.dp)).padding(16.dp)) {
+        Text(title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF7B5CFF), modifier = Modifier.padding(bottom = 12.dp))
         content()
     }
 }
 
 @Composable
-private fun SettingsSwitch(label: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, color = Color.White, fontSize = 16.sp)
-        Switch(checked = checked, onCheckedChange = onToggle)
+private fun DebridKeyField(label: String, value: String, onValueChange: (String) -> Unit) {
+    Column(Modifier.padding(vertical = 8.dp)) {
+        Text(label, color = Color(0xFFB0B0BE), fontSize = 13.sp)
+        Spacer(Modifier.height(4.dp))
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("الصق المفتاح هنا", fontSize = 12.sp) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFF7B5CFF), unfocusedBorderColor = Color(0xFF2F2F3A)
+            )
+        )
     }
 }
 
 @Composable
 private fun SettingsButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF1F1F2A),
-            contentColor = Color.White
-        ),
+        onClick = onClick, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F1F2A), contentColor = Color.White),
         shape = RoundedCornerShape(8.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = Color(0xFF7B5CFF))
             Spacer(Modifier.width(12.dp))
             Text(label, fontSize = 16.sp)
-        }
-    }
-}
-
-@Composable
-private fun SettingsDropdown(
-    label: String,
-    options: List<String>,
-    selected: String,
-    onSelected: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Text(label, color = Color(0xFFB0B0BE), fontSize = 14.sp)
-        Spacer(Modifier.height(4.dp))
-        Box {
-            Button(
-                onClick = { expanded = true },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F1F2A))
-            ) {
-                Text(selected, color = Color.White)
-            }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = { onSelected(option); expanded = false }
-                    )
-                }
-            }
         }
     }
 }

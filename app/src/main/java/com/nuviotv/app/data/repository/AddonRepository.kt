@@ -1,5 +1,6 @@
 package com.nuviotv.app.data.repository
 
+import android.util.Log
 import com.nuviotv.app.data.api.NetworkClient
 import com.nuviotv.app.data.local.AddonPreferences
 import com.nuviotv.app.data.local.WatchedItem
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 class AddonRepository(private val prefs: AddonPreferences) {
+    private val TAG = "AddonRepo"
+
     val installedAddons: Flow<List<AddonConfig>> = prefs.addons
     val favorites: Flow<List<String>> = prefs.favorites
     val watched: Flow<List<WatchedItem>> = prefs.watched
@@ -25,7 +28,9 @@ class AddonRepository(private val prefs: AddonPreferences) {
                 val config = AddonConfig(transportUrl = cleanUrl, manifest = manifest)
                 prefs.addAddon(config)
                 Result.success(config)
-            } catch (e: Exception) { Result.failure(e) }
+            } catch (e: Exception) {
+                Result.failure(Exception("${e.javaClass.simpleName}: ${e.message}"))
+            }
         }
 
     suspend fun removeAddon(url: String) = prefs.removeAddon(url)
@@ -45,14 +50,7 @@ class AddonRepository(private val prefs: AddonPreferences) {
                             try {
                                 val u = url(addon.transportUrl, "catalog/${catalog.type}/${catalog.id}.json")
                                 val response = NetworkClient.api.getCatalog(u, skip = 0)
-                                CatalogResult(
-                                    addonName = addon.manifest.name,
-                                    addonUrl = addon.transportUrl,
-                                    catalogName = catalog.name,
-                                    type = catalog.type,
-                                    id = catalog.id,
-                                    metas = response.metas
-                                )
+                                CatalogResult(addon.manifest.name, addon.transportUrl, catalog.name, catalog.type, catalog.id, response.metas)
                             } catch (e: Exception) { null }
                         }
                     }
@@ -66,9 +64,7 @@ class AddonRepository(private val prefs: AddonPreferences) {
             for (addon in installedAddons.first().filter { it.isEnabled }) {
                 if (!addon.manifest.resources.any { it.name == "meta" }) continue
                 try {
-                    return@withContext NetworkClient.api.getMeta(
-                        url(addon.transportUrl, "meta/$type/$id.json")
-                    ).meta
+                    return@withContext NetworkClient.api.getMeta(url(addon.transportUrl, "meta/$type/$id.json")).meta
                 } catch (e: Exception) { }
             }
             null
@@ -83,9 +79,7 @@ class AddonRepository(private val prefs: AddonPreferences) {
                         if (!addon.manifest.resources.any { it.name == "stream" }) return@async emptyList()
                         try {
                             val u = url(addon.transportUrl, "stream/$type/$id.json")
-                            NetworkClient.api.getStreams(u).streams.map {
-                                StreamResult(addon.manifest.name, it)
-                            }
+                            NetworkClient.api.getStreams(u).streams.map { StreamResult(addon.manifest.name, it) }
                         } catch (e: Exception) { emptyList() }
                     }
                 }
@@ -102,9 +96,7 @@ class AddonRepository(private val prefs: AddonPreferences) {
                         if (!addon.manifest.resources.any { it.name == "subtitles" }) return@async emptyList()
                         try {
                             val u = url(addon.transportUrl, "subtitles/$type/$id.json")
-                            NetworkClient.api.getSubtitles(u).subtitles.map {
-                                SubtitleResult(addon.manifest.name, it)
-                            }
+                            NetworkClient.api.getSubtitles(u).subtitles.map { SubtitleResult(addon.manifest.name, it) }
                         } catch (e: Exception) { emptyList() }
                     }
                 }
