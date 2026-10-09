@@ -6,7 +6,6 @@
     <uses-feature android:name="android.software.leanback" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <application
-        android:name=".NiovApp"
         android:allowBackup="true"
         android:banner="@drawable/tv_banner"
         android:icon="@mipmap/ic_launcher"
