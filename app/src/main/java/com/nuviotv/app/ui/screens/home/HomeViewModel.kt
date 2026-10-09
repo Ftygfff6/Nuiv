@@ -23,7 +23,8 @@ data class HomeUiState(
     val hasUpdate: Boolean = false,
     val updateVersion: String? = null,
     val apkUrl: String? = null,
-    val isDownloading: Boolean = false
+    val isDownloading: Boolean = false,
+    val debugInfo: String? = null
 )
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
@@ -39,12 +40,41 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun loadContent() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
+
+            // انتظر ثانيتين لـ AppContainer.init
+            kotlinx.coroutines.delay(2000)
+
             try {
                 val movies = AppContainer.addonRepository.loadCatalogs("movie")
                 val series = AppContainer.addonRepository.loadCatalogs("series")
-                _state.value = _state.value.copy(isLoading = false, movies = movies, series = series)
+
+                // تفاصيل التشخيص
+                val debug = buildString {
+                    append("📦 إضافات مثبتة: ")
+                    val count = AppContainer.addonPreferences.addons.let { flow ->
+                        var c = 0
+                        flow.collect { c = it.size; return@collect }
+                        c
+                    }
+                    append("$count\n")
+                    AppContainer.lastInstallSuccess?.let { append("✅ $it\n") }
+                    AppContainer.lastInstallError?.let { append("❌ $it\n") }
+                    append("🎬 Movie catalogs: ${movies.size}\n")
+                    append("📺 Series catalogs: ${series.size}")
+                }
+
+                _state.value = _state.value.copy(
+                    isLoading = false,
+                    movies = movies,
+                    series = series,
+                    debugInfo = debug
+                )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false, error = e.message ?: "خطأ")
+                _state.value = _state.value.copy(
+                    isLoading = false,
+                    error = e.message ?: "خطأ",
+                    debugInfo = AppContainer.lastInstallError
+                )
             }
         }
     }
@@ -63,9 +93,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun startUpdate() {
         val ctx = getApplication<Application>()
         val apkUrl = _state.value.apkUrl ?: return
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !ctx.packageManager.canRequestPackageInstalls()) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ctx.packageManager.canRequestPackageInstalls()) {
             val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                 data = Uri.parse("package:${ctx.packageName}")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -73,7 +101,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             ctx.startActivity(intent)
             return
         }
-
         _state.value = _state.value.copy(isDownloading = true)
         downloadId = UpdateManager.startDownload(ctx, apkUrl)
         UpdateManager.registerDownloadReceiver(ctx, downloadId) {
