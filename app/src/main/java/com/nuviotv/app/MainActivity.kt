@@ -5,12 +5,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.Icon
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -21,12 +25,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.tv.material3.Card
-import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
-import androidx.tv.material3.Text as TvText
-import androidx.tv.material3.darkColorScheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,7 +41,7 @@ class MainActivity : ComponentActivity() {
                 )
             ) {
                 Surface(
-                    modifier = Modifier.fillMaxSize().background(Color(0xFF0E0E12)),
+                    modifier = Modifier.fillMaxSize(),
                     color = Color(0xFF0E0E12)
                 ) {
                     AppNavigation()
@@ -59,7 +57,7 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    Row(Modifier.fillMaxSize()) {
+    Row(Modifier.fillMaxSize().background(Color(0xFF0E0E12))) {
         Sidebar(navController, currentRoute)
         NavHost(
             navController = navController,
@@ -96,7 +94,7 @@ fun Sidebar(navController: NavController, currentRoute: String?) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        TvText(
+        Text(
             text = "Niov",
             color = Color(0xFF7B5CFF),
             fontSize = 22.sp,
@@ -116,9 +114,8 @@ fun Sidebar(navController: NavController, currentRoute: String?) {
                     }
                 },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).height(72.dp),
-                colors = ClickableSurfaceDefaults.colors(
-                    containerColor = if (currentRoute == item.route) Color(0xFF7B5CFF).copy(alpha = 0.18f) else Color.Transparent,
-                    focusedContainerColor = Color(0xFF7B5CFF).copy(alpha = 0.35f)
+                colors = CardDefaults.cardColors(
+                    containerColor = if (currentRoute == item.route) Color(0xFF7B5CFF).copy(alpha = 0.18f) else Color.Transparent
                 )
             ) {
                 Column(
@@ -132,7 +129,7 @@ fun Sidebar(navController: NavController, currentRoute: String?) {
                         tint = if (currentRoute == item.route) Color(0xFF7B5CFF) else Color(0xFFB0B0BE)
                     )
                     Spacer(Modifier.height(4.dp))
-                    TvText(
+                    Text(
                         text = item.label,
                         fontSize = 11.sp,
                         color = if (currentRoute == item.route) Color(0xFF7B5CFF) else Color(0xFFB0B0BE)
@@ -146,19 +143,30 @@ fun Sidebar(navController: NavController, currentRoute: String?) {
 @Composable
 fun HomeScreen() {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(300.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .background(Brush.verticalGradient(listOf(Color(0xFF2A1F5C), Color(0xFF0E0E12)))),
             contentAlignment = Alignment.BottomStart
         ) {
-            TvText(
-                text = "مرحبًا بك في Niov",
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            Column(Modifier.padding(32.dp)) {
+                Text(
+                    text = "مرحبًا بك في Niov",
+                    fontSize = 42.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "تطبيق بث مبني على Stremio Addons",
+                    fontSize = 16.sp,
+                    color = Color(0xFFB0B0BE)
+                )
+            }
         }
         MediaRow("Continue Watching")
         MediaRow("Trending Now")
@@ -169,22 +177,25 @@ fun HomeScreen() {
 @Composable
 fun MediaRow(title: String) {
     Column {
-        TvText(
+        Text(
             text = title,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.padding(start = 32.dp, bottom = 12.dp)
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            repeat(5) { index ->
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 32.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(List(5) { it }) { index ->
                 Card(
                     onClick = { },
                     modifier = Modifier.width(200.dp).height(280.dp),
-                    colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFF16161D))
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF16161D))
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        TvText("Media ${index + 1}", color = Color.White)
+                        Text("Media ${index + 1}", color = Color.White)
                     }
                 }
             }
@@ -195,6 +206,6 @@ fun MediaRow(title: String) {
 @Composable
 fun PlaceholderScreen(title: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        TvText(text = title, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(text = title, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
