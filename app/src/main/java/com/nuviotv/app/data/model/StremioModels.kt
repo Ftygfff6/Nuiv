@@ -1,18 +1,28 @@
 package com.nuviotv.app.data.model
 
-import kotlinx.serialization.SerialName
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 data class AddonManifest(
     val id: String,
-    val version: String,
+    val version: String = "1.0.0",
     val name: String,
     val description: String? = null,
     val logo: String? = null,
     val background: String? = null,
     val contactEmail: String? = null,
     val types: List<String> = emptyList(),
+    @Serializable(with = ResourcesSerializer::class)
     val resources: List<ResourceItem> = emptyList(),
     val catalogs: List<CatalogDef> = emptyList(),
     val idPrefixes: List<String>? = null,
@@ -25,6 +35,42 @@ data class ResourceItem(
     val types: List<String> = emptyList(),
     val idPrefixes: List<String>? = null
 )
+
+object ResourcesSerializer : KSerializer<List<ResourceItem>> {
+    override val descriptor: SerialDescriptor =
+        buildClassSerialDescriptor("Resources")
+
+    override fun deserialize(decoder: Decoder): List<ResourceItem> {
+        val jsonDecoder = decoder as? JsonDecoder ?: return emptyList()
+        val element = jsonDecoder.decodeJsonElement()
+        if (element !is JsonArray) return emptyList()
+
+        val result = mutableListOf<ResourceItem>()
+        for (item in element) {
+            when (item) {
+                is JsonPrimitive -> {
+                    result.add(ResourceItem(name = item.content))
+                }
+                is JsonObject -> {
+                    val name = item["name"]?.jsonPrimitive?.content ?: continue
+                    val types = (item["types"] as? JsonArray)?.mapNotNull {
+                        (it as? JsonPrimitive)?.content
+                    } ?: emptyList()
+                    val idPrefixes = (item["idPrefixes"] as? JsonArray)?.mapNotNull {
+                        (it as? JsonPrimitive)?.content
+                    }
+                    result.add(ResourceItem(name = name, types = types, idPrefixes = idPrefixes))
+                }
+                else -> { }
+            }
+        }
+        return result
+    }
+
+    override fun serialize(encoder: Encoder, value: List<ResourceItem>) {
+        throw UnsupportedOperationException()
+    }
+}
 
 @Serializable
 data class CatalogDef(
@@ -63,8 +109,7 @@ data class Meta(
     val imdbRating: String? = null,
     val genres: List<String>? = null,
     val runtime: String? = null,
-    val videos: List<Video>? = null,
-    val trailerStreams: List<TrailerStream>? = null
+    val videos: List<Video>? = null
 )
 
 @Serializable
@@ -79,12 +124,6 @@ data class Video(
 )
 
 @Serializable
-data class TrailerStream(
-    val title: String? = null,
-    val ytId: String? = null
-)
-
-@Serializable
 data class Stream(
     val url: String? = null,
     val ytId: String? = null,
@@ -93,46 +132,24 @@ data class Stream(
     val externalUrl: String? = null,
     val title: String? = null,
     val name: String? = null,
-    val description: String? = null,
-    val behaviorHints: StreamBehaviorHints? = null
+    val description: String? = null
 )
 
 @Serializable
-data class StreamBehaviorHints(
-    val bingeGroup: String? = null,
-    val filename: String? = null,
-    val videoHash: String? = null,
-    val videoSize: Long? = null
-)
+data class CatalogResponse(val metas: List<Meta> = emptyList())
 
 @Serializable
-data class CatalogResponse(
-    val metas: List<Meta> = emptyList()
-)
+data class MetaResponse(val meta: Meta)
 
 @Serializable
-data class MetaResponse(
-    val meta: Meta
-)
+data class StreamResponse(val streams: List<Stream> = emptyList())
 
 @Serializable
-data class StreamResponse(
-    val streams: List<Stream> = emptyList()
-)
+data class SubtitlesResponse(val subtitles: List<Subtitle> = emptyList())
 
 @Serializable
-data class SubtitlesResponse(
-    val subtitles: List<Subtitle> = emptyList()
-)
+data class Subtitle(val id: String, val url: String, val lang: String)
 
-@Serializable
-data class Subtitle(
-    val id: String,
-    val url: String,
-    val lang: String
-)
-
-// Config model for saved addons
 @Serializable
 data class AddonConfig(
     val transportUrl: String,
