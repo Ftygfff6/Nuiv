@@ -1,16 +1,18 @@
-name: Build APK
+name: Build & Release
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -23,12 +25,42 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      - name: Build Debug APK
+      - name: Generate Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore app/niov.keystore -alias niov \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass niov123456 -keypass niov123456 \
+            -dname "CN=Niov, OU=Dev, O=Niov, L=Riyadh, S=Riyadh, C=SA"
+
+      - name: Build APK
         run: gradle assembleDebug --stacktrace
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Prepare APK
+        run: |
+          mkdir -p output
+          cp app/build/outputs/apk/debug/*.apk output/niov-latest.apk
+
+      - name: Generate Version
+        id: version
+        run: echo "tag=v$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+
+      - name: Delete Old Releases
+        uses: dev-drprasad/delete-older-releases@v0.3.4
         with:
-          name: niov-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          keep_latest: 3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Niov ${{ steps.version.outputs.tag }}"
+          body: |
+            ## 🎉 تحديث Niov الجديد
+            - افتح التطبيق واضغط "تحديث الآن"
+            - أو حمّل APK مباشرة من الأسفل
+          files: output/niov-latest.apk
+          draft: false
+          prerelease: false

@@ -3,11 +3,7 @@ package com.nuviotv.app.data.repository
 import com.nuviotv.app.data.api.NetworkClient
 import com.nuviotv.app.data.local.AddonPreferences
 import com.nuviotv.app.data.local.WatchedItem
-import com.nuviotv.app.data.model.AddonConfig
-import com.nuviotv.app.data.model.AddonManifest
-import com.nuviotv.app.data.model.Meta
-import com.nuviotv.app.data.model.Stream
-import com.nuviotv.app.data.model.Subtitle
+import com.nuviotv.app.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -17,7 +13,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 class AddonRepository(private val prefs: AddonPreferences) {
-
     val installedAddons: Flow<List<AddonConfig>> = prefs.addons
     val favorites: Flow<List<String>> = prefs.favorites
     val watched: Flow<List<WatchedItem>> = prefs.watched
@@ -26,14 +21,11 @@ class AddonRepository(private val prefs: AddonPreferences) {
         withContext(Dispatchers.IO) {
             try {
                 val cleanUrl = transportUrl.trim().trimEnd('/')
-                val api = NetworkClient.apiFor(cleanUrl)
-                val manifest: AddonManifest = api.getManifest("$cleanUrl/manifest.json")
+                val manifest = NetworkClient.api.getManifest("$cleanUrl/manifest.json")
                 val config = AddonConfig(transportUrl = cleanUrl, manifest = manifest)
                 prefs.addAddon(config)
                 Result.success(config)
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
+            } catch (e: Exception) { Result.failure(e) }
         }
 
     suspend fun removeAddon(url: String) = prefs.removeAddon(url)
@@ -41,36 +33,29 @@ class AddonRepository(private val prefs: AddonPreferences) {
     suspend fun toggleFavorite(metaId: String) = prefs.toggleFavorite(metaId)
     suspend fun markWatched(item: WatchedItem) = prefs.markWatched(item)
 
-    suspend fun loadCatalogs(type: String = "movie"): List<CatalogResult> =
+    private fun url(base: String, path: String) = "${base.trimEnd('/')}/${path.trimStart('/')}"
+
+    suspend fun loadCatalogs(type: String): List<CatalogResult> =
         withContext(Dispatchers.IO) {
             val addons = installedAddons.first().filter { it.isEnabled }
             coroutineScope {
                 val tasks = addons.flatMap { addon ->
-                    addon.manifest.catalogs
-                        .filter { it.type == type }
-                        .map { catalog ->
-                            async {
-                                try {
-                                    val api = NetworkClient.apiFor(addon.transportUrl)
-                                    val response = api.getCatalog(
-                                        baseUrl = addon.transportUrl,
-                                        type = catalog.type,
-                                        id = catalog.id,
-                                        skip = 0
-                                    )
-                                    CatalogResult(
-                                        addonName = addon.manifest.name,
-                                        addonUrl = addon.transportUrl,
-                                        catalogName = catalog.name,
-                                        type = catalog.type,
-                                        id = catalog.id,
-                                        metas = response.metas
-                                    )
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            }
+                    addon.manifest.catalogs.filter { it.type == type }.map { catalog ->
+                        async {
+                            try {
+                                val u = url(addon.transportUrl, "catalog/${catalog.type}/${catalog.id}.json")
+                                val response = NetworkClient.api.getCatalog(u, skip = 0)
+                                CatalogResult(
+                                    addonName = addon.manifest.name,
+                                    addonUrl = addon.transportUrl,
+                                    catalogName = catalog.name,
+                                    type = catalog.type,
+                                    id = catalog.id,
+                                    metas = response.metas
+                                )
+                            } catch (e: Exception) { null }
                         }
+                    }
                 }
                 tasks.awaitAll().filterNotNull()
             }
@@ -78,17 +63,13 @@ class AddonRepository(private val prefs: AddonPreferences) {
 
     suspend fun loadMeta(type: String, id: String): Meta? =
         withContext(Dispatchers.IO) {
-            val addons = installedAddons.first().filter { it.isEnabled }
-            for (addon in addons) {
-                val supportsMeta = addon.manifest.resources.any { it.name == "meta" }
-                if (!supportsMeta) continue
+            for (addon in installedAddons.first().filter { it.isEnabled }) {
+                if (!addon.manifest.resources.any { it.name == "meta" }) continue
                 try {
-                    val api = NetworkClient.apiFor(addon.transportUrl)
-                    val response = api.getMeta(addon.transportUrl, type, id)
-                    return@withContext response.meta
-                } catch (e: Exception) {
-                    // try next
-                }
+                    return@withContext NetworkClient.api.getMeta(
+                        url(addon.transportUrl, "meta/$type/$id.json")
+                    ).meta
+                } catch (e: Exception) { }
             }
             null
         }
@@ -99,17 +80,13 @@ class AddonRepository(private val prefs: AddonPreferences) {
             coroutineScope {
                 val tasks = addons.map { addon ->
                     async {
-                        val supportsStream = addon.manifest.resources.any { it.name == "stream" }
-                        if (!supportsStream) return@async emptyList()
+                        if (!addon.manifest.resources.any { it.name == "stream" }) return@async emptyList()
                         try {
-                            val api = NetworkClient.apiFor(addon.transportUrl)
-                            val response = api.getStreams(addon.transportUrl, type, id)
-                            response.streams.map { stream ->
-                                StreamResult(addonName = addon.manifest.name, stream = stream)
+                            val u = url(addon.transportUrl, "stream/$type/$id.json")
+                            NetworkClient.api.getStreams(u).streams.map {
+                                StreamResult(addon.manifest.name, it)
                             }
-                        } catch (e: Exception) {
-                            emptyList()
-                        }
+                        } catch (e: Exception) { emptyList() }
                     }
                 }
                 tasks.awaitAll().flatten()
@@ -122,17 +99,13 @@ class AddonRepository(private val prefs: AddonPreferences) {
             coroutineScope {
                 val tasks = addons.map { addon ->
                     async {
-                        val supportsSubs = addon.manifest.resources.any { it.name == "subtitles" }
-                        if (!supportsSubs) return@async emptyList()
+                        if (!addon.manifest.resources.any { it.name == "subtitles" }) return@async emptyList()
                         try {
-                            val api = NetworkClient.apiFor(addon.transportUrl)
-                            val response = api.getSubtitles(addon.transportUrl, type, id)
-                            response.subtitles.map { sub ->
-                                SubtitleResult(addonName = addon.manifest.name, subtitle = sub)
+                            val u = url(addon.transportUrl, "subtitles/$type/$id.json")
+                            NetworkClient.api.getSubtitles(u).subtitles.map {
+                                SubtitleResult(addon.manifest.name, it)
                             }
-                        } catch (e: Exception) {
-                            emptyList()
-                        }
+                        } catch (e: Exception) { emptyList() }
                     }
                 }
                 tasks.awaitAll().flatten()
@@ -145,21 +118,13 @@ class AddonRepository(private val prefs: AddonPreferences) {
             coroutineScope {
                 val tasks = addons.map { addon ->
                     async {
-                        val searchCatalog = addon.manifest.catalogs.firstOrNull {
+                        val cat = addon.manifest.catalogs.firstOrNull {
                             it.type == type && it.extra?.any { e -> e.name == "search" } == true
                         } ?: return@async emptyList()
                         try {
-                            val api = NetworkClient.apiFor(addon.transportUrl)
-                            val response = api.getCatalog(
-                                baseUrl = addon.transportUrl,
-                                type = type,
-                                id = searchCatalog.id,
-                                search = query
-                            )
-                            response.metas
-                        } catch (e: Exception) {
-                            emptyList()
-                        }
+                            val u = url(addon.transportUrl, "catalog/$type/${cat.id}.json")
+                            NetworkClient.api.getCatalog(u, skip = 0, search = query).metas
+                        } catch (e: Exception) { emptyList() }
                     }
                 }
                 tasks.awaitAll().flatten().distinctBy { it.id }
@@ -168,20 +133,8 @@ class AddonRepository(private val prefs: AddonPreferences) {
 }
 
 data class CatalogResult(
-    val addonName: String,
-    val addonUrl: String,
-    val catalogName: String,
-    val type: String,
-    val id: String,
-    val metas: List<Meta>
+    val addonName: String, val addonUrl: String, val catalogName: String,
+    val type: String, val id: String, val metas: List<Meta>
 )
-
-data class StreamResult(
-    val addonName: String,
-    val stream: Stream
-)
-
-data class SubtitleResult(
-    val addonName: String,
-    val subtitle: Subtitle
-)
+data class StreamResult(val addonName: String, val stream: Stream)
+data class SubtitleResult(val addonName: String, val subtitle: Subtitle)

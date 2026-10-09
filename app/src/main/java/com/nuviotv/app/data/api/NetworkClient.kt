@@ -9,7 +9,6 @@ import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
 
 object NetworkClient {
-
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -17,34 +16,20 @@ object NetworkClient {
     }
 
     private val okHttp: OkHttpClient by lazy {
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        }
         OkHttpClient.Builder()
-            .addInterceptor(logging)
+            .addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BASIC
+            })
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
             .build()
     }
-
-    private val contentType = "application/json".toMediaType()
 
     val api: StremioApi by lazy {
         Retrofit.Builder()
             .baseUrl("https://v3-cinemeta.strem.io/")
             .client(okHttp)
-            .addConverterFactory(json.asConverterFactory(contentType))
-            .build()
-            .create(StremioApi::class.java)
-    }
-
-    // Dynamic client for any base URL
-    fun apiFor(baseUrl: String): StremioApi {
-        return Retrofit.Builder()
-            .baseUrl(if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/")
-            .client(okHttp)
-            .addConverterFactory(json.asConverterFactory(contentType))
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(StremioApi::class.java)
     }

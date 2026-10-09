@@ -1,48 +1,27 @@
 package com.nuviotv.app.data.api
 
-import com.nuviotv.app.data.model.AddonManifest
-import com.nuviotv.app.data.model.CatalogResponse
-import com.nuviotv.app.data.model.MetaResponse
-import com.nuviotv.app.data.model.StreamResponse
-import com.nuviotv.app.data.model.SubtitlesResponse
+import com.nuviotv.app.data.model.*
 import retrofit2.http.GET
-import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Url
 
 interface StremioApi {
+    @GET
+    suspend fun getManifest(@Url fullUrl: String): AddonManifest
 
-    @GET("manifest.json")
-    suspend fun getManifest(@Url baseUrl: String): AddonManifest
-
-    @GET("catalog/{type}/{id}.json")
+    @GET
     suspend fun getCatalog(
-        @Url baseUrl: String,
-        @Path("type") type: String,
-        @Path("id") id: String,
+        @Url fullUrl: String,
         @Query("skip") skip: Int = 0,
-        @Query("search") search: String? = null,
-        @Query("genre") genre: String? = null
+        @Query("search") search: String? = null
     ): CatalogResponse
 
-    @GET("meta/{type}/{id}.json")
-    suspend fun getMeta(
-        @Url baseUrl: String,
-        @Path("type") type: String,
-        @Path("id") id: String
-    ): MetaResponse
+    @GET
+    suspend fun getMeta(@Url fullUrl: String): MetaResponse
 
-    @GET("stream/{type}/{id}.json")
-    suspend fun getStreams(
-        @Url baseUrl: String,
-        @Path("type") type: String,
-        @Path("id") id: String
-    ): StreamResponse
+    @GET
+    suspend fun getStreams(@Url fullUrl: String): StreamResponse
 
-    @GET("subtitles/{type}/{id}.json")
-    suspend fun getSubtitles(
-        @Url baseUrl: String,
-        @Path("type") type: String,
-        @Path("id") id: String
-    ): SubtitlesResponse
+    @GET
+    suspend fun getSubtitles(@Url fullUrl: String): SubtitlesResponse
 }
